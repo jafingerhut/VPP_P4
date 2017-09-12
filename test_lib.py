@@ -1,5 +1,11 @@
 #!/usr/bin/env python2
 
+# This file was created by copying the following file, and then making
+# small modifications to it.  All such changes are intended to be
+# marked with the string CHANGE_FROM_ORIGINAL.
+
+# https://github.com/p4lang/behavioral-model/blob/master/tools/runtime_CLI.py
+
 # Copyright 2013-present Barefoot Networks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1500,7 +1506,7 @@ class RuntimeAPI(cmd.Cmd):
         print "Destroying multicast group", mgrp
         self.mc_client.bm_mc_mgrp_destroy(0, mgrp)
 
-    def ports_to_port_map_str(self, ports):
+    def ports_to_port_map_str(self, ports, description="port"):
         last_port_num = 0
         port_map_str = ""
         ports_int = []
@@ -1508,10 +1514,17 @@ class RuntimeAPI(cmd.Cmd):
             try:
                 port_num = int(port_num_str)
             except:
-                raise UIn_Error("'%s' is not a valid port number" % port_num_str)
+                raise UIn_Error("'%s' is not a valid %s number"
+                                "" % (port_num_str, description))
+            if port_num < 0:
+                raise UIn_Error("'%s' is not a valid %s number"
+                                "" % (port_num_str, description))
             ports_int.append(port_num)
         ports_int.sort()
         for port_num in ports_int:
+            if port_num == (last_port_num - 1):
+                raise UIn_Error("Found duplicate %s number '%s'"
+                                "" % (description, port_num))
             port_map_str += "0" * (port_num - last_port_num) + "1"
             last_port_num = port_num + 1
         return port_map_str[::-1]
@@ -1526,7 +1539,7 @@ class RuntimeAPI(cmd.Cmd):
         if self.pre_type == PreType.SimplePreLAG:
             i += 1
             lags = [] if i == len(args) else args[i:]
-            lag_map_str = self.ports_to_port_map_str(lags)
+            lag_map_str = self.ports_to_port_map_str(lags, description="lag")
         else:
             lag_map_str = None
         return port_map_str, lag_map_str
@@ -1619,7 +1632,7 @@ class RuntimeAPI(cmd.Cmd):
             lag_index = int(args[0])
         except:
             raise UIn_Error("Bad format for lag index")
-        port_map_str = self.ports_to_port_map_str(args[1:])
+        port_map_str = self.ports_to_port_map_str(args[1:], description="lag")
         print "Setting lag membership:", lag_index, "<-", port_map_str
         self.mc_client.bm_mc_set_lag_membership(0, lag_index, port_map_str)
 
@@ -1827,18 +1840,25 @@ class RuntimeAPI(cmd.Cmd):
 
     @handle_bad_input
     def do_register_read(self, line):
-        "Read register value: register_read <name> <index>"
+        "Read register value: register_read <name> [index]"
         args = line.split()
-        self.exactly_n_args(args, 2)
+        self.at_least_n_args(args, 1)
         register_name = args[0]
         register = self.get_res("register", register_name, REGISTER_ARRAYS)
-        index = args[1]
-        try:
-            index = int(index)
-        except:
-            raise UIn_Error("Bad format for index")
-        value = self.client.bm_register_read(0, register_name, index)
-        print "%s[%d]= " % (register_name, index), value
+        if len(args) > 1:
+            self.exactly_n_args(args, 2)
+            index = args[1]
+            try:
+                index = int(index)
+            except:
+                raise UIn_Error("Bad format for index")
+            value = self.client.bm_register_read(0, register_name, index)
+            print "{}[{}]=".format(register_name, index), value
+        else:
+            sys.stderr.write("register index omitted, reading entire array\n")
+            entries = self.client.bm_register_read_all(0, register_name)
+            print "{}=".format(register_name), ", ".join(
+                [str(e) for e in entries])
 
     def complete_register_read(self, text, line, start_index, end_index):
         return self._complete_registers(text)
@@ -2244,8 +2264,6 @@ def load_json_config(standard_client=None, json_path=None):
 
 def test_init(args):
     #args = get_parser().parse_args()
-    # x = get_parser()
-    # args = x.parse_args()
 
     standard_client, mc_client = thrift_connect(
         args.thrift_ip, args.thrift_port,
@@ -2257,5 +2275,3 @@ def test_init(args):
     tmp = RuntimeAPI(args.pre, standard_client, mc_client)
     #print "done runtime"
     return tmp
-
-
