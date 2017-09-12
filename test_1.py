@@ -3,10 +3,12 @@
 ''' test case for P4 '''
 
 from __future__ import print_function
-import subprocess
 from scapy.all import *
+# The following line isn't really necessary given the previous import
+# line, but it does help avoid many 'undefined variable' pylint
+# warnings
 from scapy.all import TCP, Ether, IP
-from runtime_CLI import test_init, get_parser, PreType
+import runtime_CLI
 import sstf_lib as sstf
 
 
@@ -173,14 +175,14 @@ def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     fwd_pkt2 = (Ether() / IP(src='10.1.0.5', dst='224.1.0.1') /
                 TCP(sport=5793, dport=80))
 
-    exp_pkt1 = (Ether(src=exp_src_mac) /
-                IP(src='10.1.0.3', dst='224.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    exp_pkt2 = (Ether(src=exp_src_mac) /
-                IP(src='10.1.0.5', dst='224.1.0.1', ttl=fwd_pkt2[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    # The ports 1 nad 0 are exchanged to check that the rpf and
-    # ingress port are different , thus dropping the packets
+#    exp_pkt1 = (Ether(src=exp_src_mac) /
+#                IP(src='10.1.0.3', dst='224.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
+#                TCP(sport=5793, dport=80))
+#    exp_pkt2 = (Ether(src=exp_src_mac) /
+#                IP(src='10.1.0.5', dst='224.1.0.1', ttl=fwd_pkt2[IP].ttl-1) /
+#                TCP(sport=5793, dport=80))
+    # The ports 1 and 0 are exchanged to check that the rpf and
+    # ingress port are different, thus dropping the packets
     pack = sstf.send_pkts_and_capture(port_int_map,
                                       [{'port': 1, 'packet': fwd_pkt1},
                                        {'port': 0, 'packet': fwd_pkt2}])
@@ -203,41 +205,9 @@ def main():
                                            4: 'veth10',
                                            5: 'veth12',
                                            6: 'veth14'})
-    
-    args = get_parser().parse_args()
-    args.pre = PreType.SimplePreLAG
-    
-    #print('args.thrift_port=%s' % (args.thrift_port))
-    #print('args.thrift_ip=%s' % (args.thrift_ip))
-    #print('args.json=%s' % (args.json))
-    #print('args.pre=%s' % (args.pre))
-    #print('PreType.SimplePre=%s' % (PreType.SimplePre))
-    #print('PreType.SimplePreLAG=%s' % (PreType.SimplePreLAG))
-
-    # When running tests repeatedly, it sometimes happens that the
-    # test script dies due to raising some exception, without getting
-    # to the end and killing the simple_switch child process.  To help
-    # avoid confusion, kill any existing simple_switch processes
-    # before proceeding.
-    log_file_base_name = "log_file_data"
-    log_file_full_name = log_file_base_name + ".txt"
-    subprocess.call(["killall", "simple_switch"])
-    try:
-        os.remove(log_file_full_name)
-    except OSError:
-        print("Got exception OSError trying to do os.remove() on a file,"
-              " probably because there is no such file.  Continuing.")
-
-    ss_cmd_and_args = (["simple_switch",
-                        "--log-file", log_file_base_name,
-                        "--log-flush",
-                        "--thrift-port", str(args.thrift_port)] +
-                       sstf.ss_interface_args(port_int_map) +
-                       [args.json])
-    ss_obj = subprocess.Popen(ss_cmd_and_args)
-
-    time.sleep(2)
-    hdl = test_init(args)
+    args = sstf.get_args()
+    ss_process_obj = sstf.start_simple_switch(args, port_int_map)
+    hdl = runtime_CLI.test_init(args)
 
     exp_src_mac = "00:11:22:33:44:55"
     exp_dst_mac = "02:13:57:ab:cd:ef"
@@ -256,7 +226,7 @@ def main():
     output5 = test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output5)
 
-    ss_obj.kill()
+    ss_process_obj.kill()
 
 
 if __name__ == '__main__':

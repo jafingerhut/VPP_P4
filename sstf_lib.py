@@ -1,11 +1,31 @@
+#!/usr/bin/env python2
+
 import collections
+import os
 import Queue
 from StringIO import StringIO
+import subprocess
 import time
 import threading
 
+from runtime_CLI import get_parser, PreType
 from scapy.all import sniff, sendp
 
+
+
+def get_args():
+    args = get_parser().parse_args()
+    # See comments in runtime_CLI.py for method test_init() for why
+    # the following assignment.
+    args.pre = PreType.SimplePreLAG
+
+    #print('args.thrift_port=%s' % (args.thrift_port))
+    #print('args.thrift_ip=%s' % (args.thrift_ip))
+    #print('args.json=%s' % (args.json))
+    #print('args.pre=%s' % (args.pre))
+    #print('PreType.SimplePre=%s' % (PreType.SimplePre))
+    #print('PreType.SimplePreLAG=%s' % (PreType.SimplePreLAG))
+    return args
 
 
 def port_intf_mapping(port2intf):
@@ -42,6 +62,35 @@ def ss_interface_args(port_int_map):
         result.append("-i")
         result.append(str(port_int) + "@" + eth_name)
     return result
+
+
+def start_simple_switch(args, port_int_map):
+    # When running tests repeatedly, it sometimes happens that the
+    # test script dies due to raising some exception, without getting
+    # to the end and killing the simple_switch child process.  To help
+    # avoid confusion, kill any existing simple_switch processes
+    # before proceeding.
+    subprocess.call(["killall", "simple_switch"])
+    log_file_base_name = "log_file_data"
+    log_file_full_name = log_file_base_name + ".txt"
+    try:
+        os.remove(log_file_full_name)
+    except OSError:
+        print("Got exception OSError trying to do os.remove() on a file,"
+              " probably because there is no such file.  Continuing.")
+
+    ss_cmd_and_args = (["simple_switch",
+                        "--log-file", log_file_base_name,
+                        "--log-flush",
+                        "--thrift-port", str(args.thrift_port)] +
+                       ss_interface_args(port_int_map) +
+                       [args.json])
+    ss_process_obj = subprocess.Popen(ss_cmd_and_args)
+    # Give a little time for simple_switch process to be ready to
+    # accept a connection on port args.thrift_port, before trying to
+    # connect to it.
+    time.sleep(2)
+    return ss_process_obj
 
 
 def sniff_record(queue, port_int_map):
