@@ -319,8 +319,8 @@ def table_entries_multicast(a, exp_src_mac):
     mc_node_value1 = RuntimeAPI.do_mc_node_create(a, "12 2 3")
     mc_node_value2 = RuntimeAPI.do_mc_node_create(a, "24 4 5 6")
 
-    node_handle1 = "2 "+ str(mc_node_value1)
-    node_handle2 = "3 "+ str(mc_node_value2)
+    node_handle1 = "2 " + str(mc_node_value1)
+    node_handle2 = "3 " + str(mc_node_value2)
 
     RuntimeAPI.do_mc_node_associate(a, node_handle1)
     RuntimeAPI.do_mc_node_associate(a, node_handle2)
@@ -393,8 +393,7 @@ def test_multicast_rpf(a, port_interface_mapping, exp_src_mac, exp_dst_mac):
 
 def main():
     '''main block '''
-    parser = get_parser()
-    args = parser.parse_args()
+    args = get_parser().parse_args()
     args.pre = PreType.SimplePreLAG
     # One time, construct a list of all ethernet interface names,
     # which will be used by future calls to sniff.

@@ -945,6 +945,21 @@ class RuntimeAPI(cmd.Cmd):
     def complete_table_clear(self, text, line, start_index, end_index):
         return self._complete_tables(text)
 
+    # CHANGE_FROM_ORIGINAL: The @handle_bad_input decorator that was
+    # just before 'def do_table_add' modifies the behavior of
+    # do_table_add (and any other method it decorates) by handling
+    # various kinds of exceptions it can raise, printing a message,
+    # and preventing the exception from being raised to the caller.
+
+    # This makes sense in the context of calling these methods from
+    # the simple_switch_CLI program, where clearer error messages, and
+    # avoiding simple_switch_CLI from exiting due to a raised
+    # exception, are desirable.
+
+    # In the context of calling these methods from a set of automated
+    # tests, it is far more useful for the exception to be 'passed on'
+    # to the caller, because it makes mistakes in calling these
+    # methods far more obvious.
     #@handle_bad_input
     def do_table_add(self, line):
         "Add entry to a match table: table_add <table name> <action name> <match fields> => <action parameters> [priority]"
@@ -1562,6 +1577,11 @@ class RuntimeAPI(cmd.Cmd):
             print "Creating node with rid", rid, ", port map", port_map_str, "and lag map", lag_map_str
             l1_hdl = self.mc_client.bm_mc_node_create(0, rid, port_map_str, lag_map_str)
         print "node was created with handle", l1_hdl
+        # CHANGE_FROM_ORIGINAL: Returning created handles to the
+        # caller is useful when writing automated tests, since then
+        # even if we do not know in advance what the numerical value
+        # of those handles will be, we can save them in variables and
+        # use them in later RuntimeAPI commands.
         return l1_hdl
 
     def get_node_handle(self, s):
@@ -2262,16 +2282,68 @@ class RuntimeAPI(cmd.Cmd):
 def load_json_config(standard_client=None, json_path=None):
     load_json_str(utils.get_json_config(standard_client, json_path))
 
+# CHANGE_FROM_ORIGINAL: There are several changes here in order to
+# make it easy to use this code from an automated test environment, as
+# opposed to using it from simple_switch_CLI:
+#
+# Method test_init() was copied from method main() below, then
+# modified to make it more appropriate for use from an automated
+# testing program, vs. using it from simple_switch_CLI.
+#
+# The caller is expected to call get_parser() and parse_args()
+# elsewhere in this file directly, before calling test_init().  This
+# allows the caller to control what args value to use, and more easily
+# add its own command line arguments, if it wishes to.
+#
+# The following sequence of calls have been tested to work as desired
+# when calling test_init() from a Python test program:
+#
+#   args = get_parser().parse_args()
+#   args.pre = PreType.SimplePreLAG
+#   hdl = test_init(args)
+#
+# I do not recall right now why the assignment to args.pre was
+# necessary, but without it there were errors when doing some
+# multicast replication tests with simple_switch.  The following
+# Python program in the behavioral-model repo makes a similar
+# assignment:
+#
+# https://github.com/p4lang/behavioral-model/blob/master/targets/simple_switch/sswitch_CLI.py#L82
+#
+# load_json_config() is called without the second argument args.json,
+# which causes this test client to load the JSON data from the running
+# simple_switch process.  This is convenient, and avoids the
+# possibility that the JSON files will differ between this client and
+# the simple_switch process.
+#
+# While it is desirable to call the cmdloop() method call for
+# simple_switch_CLI, here we do not want that.  Instead we want to
+# return the constructed RuntimeAPI object, so that the caller can
+# save it and use it to make method calls,
+# e.g.
+#
+#    RunTimeAPI.do_table_add(
+#        hdl, "<table_name> <action_name> <keys> => <action params>")
+
 def test_init(args):
-    #args = get_parser().parse_args()
+    standard_client, mc_client = thrift_connect(
+        args.thrift_ip, args.thrift_port,
+        RuntimeAPI.get_thrift_services(args.pre)
+    )
+    load_json_config(standard_client)
+    return RuntimeAPI(args.pre, standard_client, mc_client)
+
+def main():
+    args = get_parser().parse_args()
 
     standard_client, mc_client = thrift_connect(
         args.thrift_ip, args.thrift_port,
         RuntimeAPI.get_thrift_services(args.pre)
     )
-    #print "int thrift"
-    load_json_config(standard_client)
 
-    tmp = RuntimeAPI(args.pre, standard_client, mc_client)
-    #print "done runtime"
-    return tmp
+    load_json_config(standard_client, args.json)
+
+    RuntimeAPI(args.pre, standard_client, mc_client).cmdloop()
+
+if __name__ == '__main__':
+    main()
