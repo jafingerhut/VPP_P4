@@ -15,13 +15,13 @@ from test_lib import test_init, get_parser, PreType
 from test_lib import RuntimeAPI as API
 
 
-
 def sniff_record(queue, port_int_map):
     '''sniff record module : sniffs the queue for packets'''
     print("sniff start")
     pkt = sniff(timeout=3, iface=port_int_map['intf_names'])
     print("sniff stop returned %d packet" % (len(pkt)))
     queue.put(pkt)
+
 
 def  pkt_str(pack):
     '''gets value from packet in the form of str '''
@@ -31,9 +31,19 @@ def  pkt_str(pack):
     sys.stdout = old_stdout
     return mystdout.getvalue()
 
+
+def check_equality(p, exp_pkt1):
+    ''' compares 2 packets - expected and packet which came '''
+    if pkt_str(p['packet']) == pkt_str(exp_pkt1):
+        return "equal"
+    else:
+        return "not equal"
+
+
 def byte_to_hex(byteStr):
     '''converts byte to hex '''
     return ''.join(["%02X " % ord(x) for x in byteStr]).strip()
+
 
 def print_packets(input_packet, expected_packet):
     print("Input    Packet: %s" % (input_packet))
@@ -56,6 +66,10 @@ def split_string(input_packet, expected_packet):
             print_packets(input_packet, expected_packet)
             return "different"
     return "equal"
+
+
+# TBD: check_exp_outpkt() is not currently called from anywhere.
+# Delete in favor of create_port_seq_list()?
 
 def check_exp_outpkt(expected_packets, sniffed_pack, input_ports):
     ''' sniffs packet expected on output '''
@@ -100,6 +114,7 @@ def check_exp_outpkt(expected_packets, sniffed_pack, input_ports):
                 " out on output ports are %d"
                 "" % (expected_len, sniffin_len))
 
+
 def packets_by_port(packet_list_exp_snif, input_ports):
 
     sniffed_pkts_by_port = {}
@@ -114,7 +129,6 @@ def packets_by_port(packet_list_exp_snif, input_ports):
                 sniffed_pkts_by_port[num] = [j]
 
     return sniffed_pkts_by_port
-
 
 
 def create_port_seq_list(expected_packets, sniffed_pack, input_ports):
@@ -164,13 +178,20 @@ def create_port_seq_list(expected_packets, sniffed_pack, input_ports):
 
 
 def send_pkts_and_capture(port_int_map, port_packet_list):
-    ''' sends packets to P4 and captures by sniffing '''
+    '''Send packets in list `port_packet_list` to simple_switch
+    process, while capturing packets sent to simple_switch, and
+    output by simple_switch, by Scapy sniff() call.'''
+
     queue = Queue.Queue()
     thd = threading.Thread(name="sniff_thread",
                            target=lambda: sniff_record(queue, port_int_map))
     thd.start()
-    # gives time for time to start sniffing... so packets are sniffed once sniff call begins
+
+    # The time.sleep() call here gives time for thread 'thd' to start
+    # sniffing packets, before we begin sending packets to the
+    # simple_switch process immediately after that.
     time.sleep(1)
+
     for x in port_packet_list:
         port_num = x['port']
         iface_name = port_int_map['port2intf'][port_num]
@@ -184,39 +205,42 @@ def send_pkts_and_capture(port_int_map, port_packet_list):
         Packet_list.append({'port': port_no, 'packet': p})
     return Packet_list
 
-def interfaceArgs(port_int_map):
-    ''' written to start simple switch every time program has to run '''
+
+def ss_interface_args(port_int_map):
+    '''Return list of strings which are the '-i' command line options to
+    simple_switch process for the desired `port_int_map`.'''
+
     result = []
     for port_int in port_int_map['port2intf']:
         eth_name = port_int_map['port2intf'][port_int]
-        result.append("-i " + str(port_int) + "@" + eth_name)
+        result.append("-i")
+        result.append(str(port_int) + "@" + eth_name)
     return result
 
 
-def check_equality(p, exp_pkt1):
-    ''' compares 2 packets - expected and packet which came '''
-    if pkt_str(p['packet']) == pkt_str(exp_pkt1):
-        return "equal"
-    else:
-        return "not equal"
-
 def port_intf_mapping(port2intf):
-
     port_int_map = {
         'port2intf':port2intf
     }
 
+    # Calculate a list of Linux interface names.  Used later as an
+    # argument to Scapy's sniff() method.
     intf_names = []
     for port_num in port_int_map['port2intf']:
         intf_names.append(port_int_map['port2intf'][port_num])
     port_int_map['intf_names'] = intf_names
 
+    # Calculate a dict that maps Linux interface names to P4 program
+    # port numbers.  Used later in send_pkts_and_capture() to
+    # determine the P4 program port numbers of packets captured by
+    # sniff().
     intf_port_map = {}
-
     for port_num in port_int_map['port2intf']:
         intf_port_map[port_int_map['port2intf'][port_num]] = port_num
     port_int_map['intf_port_names'] = intf_port_map
+
     return port_int_map
+
 
 def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
 
@@ -224,9 +248,9 @@ def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
     API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
     API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.32/32 => 45")
     API.do_table_add(hdl, "mac_da set_bd_dmac_intf 58 => 9 " + exp_dst_mac + " 2")
-    API.do_table_add(hdl, "mac_da set_bd_dmac_intf 45 => 7 "+exp_dst_mac+" 3")
-    API.do_table_add(hdl, "send_frame rewrite_mac 9 => "+exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 7 => "+exp_src_mac)
+    API.do_table_add(hdl, "mac_da set_bd_dmac_intf 45 => 7 " + exp_dst_mac + " 3")
+    API.do_table_add(hdl, "send_frame rewrite_mac 9 => " + exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 7 => " + exp_src_mac)
     API.do_table_add(hdl, "mtu_check assign_mtu 9 => 400")
     API.do_table_add(hdl, "mtu_check assign_mtu 7 => 400")
 
@@ -259,6 +283,7 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
                                   pack, input_ports)
     return output
 
+
 def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     tcp_payload = "a" * 80
@@ -287,6 +312,7 @@ def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
                                   pack, input_ports)
     return output
 
+
 def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
@@ -305,6 +331,7 @@ def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     output = create_port_seq_list([{'port': 2, 'packet': exp_pkt1}],
                                   pack, input_ports)
     return output
+
 
 def table_entries_multicast(hdl, exp_src_mac):
 
@@ -337,17 +364,19 @@ def table_entries_multicast(hdl, exp_src_mac):
     API.do_table_add(hdl, "mtu_check assign_mtu 13 => 400")
     API.do_table_add(hdl, "mtu_check assign_mtu 14 => 400")
 
-    API.do_table_add(hdl, "send_frame rewrite_mac 10 => "+exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 11 => "+exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 12 => "+exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 13 => "+exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 14 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 10 => " + exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 11 => " + exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 12 => " + exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 13 => " + exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 14 => " + exp_src_mac)
 
 
 def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
-    fwd_pkt1 = Ether() / IP(src='10.1.0.3', dst='224.1.0.1') / TCP(sport=5793, dport=80)
-    fwd_pkt2 = Ether() / IP(src='10.1.0.5', dst='224.1.0.1') / TCP(sport=5793, dport=80)
+    fwd_pkt1 = (Ether() / IP(src='10.1.0.3', dst='224.1.0.1') /
+                TCP(sport=5793, dport=80))
+    fwd_pkt2 = (Ether() / IP(src='10.1.0.5', dst='224.1.0.1') /
+                TCP(sport=5793, dport=80))
 
     exp_pkt1 = (Ether(src=exp_src_mac) /
                 IP(src='10.1.0.3', dst='224.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
@@ -367,6 +396,7 @@ def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
                                    {'port': 6, 'packet': exp_pkt2}],
                                   pack, input_ports)
     return output
+
 
 def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
@@ -393,10 +423,11 @@ def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
 def main():
     '''main block '''
-    args = get_parser().parse_args()
-    args.pre = PreType.SimplePreLAG
-    # One time, construct a list of all ethernet interface names,
-    # which will be used by future calls to sniff.
+
+    # port_int_map represents the desired correspondence between P4
+    # program port numbers and Linux interfaces.  The data structure
+    # returned by port_intf_mapping() is used in multiple places
+    # throughout the code.
     port_int_map = port_intf_mapping({0: 'veth2',
                                       1: 'veth4',
                                       2: 'veth6',
@@ -404,11 +435,17 @@ def main():
                                       4: 'veth10',
                                       5: 'veth12',
                                       6: 'veth14'})
+
+    args = get_parser().parse_args()
+    args.pre = PreType.SimplePreLAG
     
     thriftPort = 9090
-    # enter the name of the json file which will be created when we
-    # compile the P4 code.
 
+    # When running tests repeatedly, it sometimes happens that the
+    # test script dies due to raising some exception, without getting
+    # to the end and killing the simple_switch child process.  To help
+    # avoid confusion, kill any existing simple_switch processes
+    # before proceeding.
     subprocess.call(["killall", "simple_switch"])
     try:
         os.remove("log_file_data.txt")
@@ -416,11 +453,13 @@ def main():
         print("Got exception OSError trying to do os.remove() on a file,"
               " probably because there is no such file.  Continuing.")
 
-    runswitch = (["simple_switch",
-                  "--log-file", "log_file_data", "--log-flush",
-                  "--thrift-port", str(thriftPort)] +
-                 interfaceArgs(port_int_map) + [args.json])
-    sw = subprocess.Popen(runswitch)
+    ss_cmd_and_args = (["simple_switch",
+                        "--log-file", "log_file_data",
+                        "--log-flush",
+                        "--thrift-port", str(thriftPort)] +
+                       ss_interface_args(port_int_map) +
+                       [args.json])
+    ss_obj = subprocess.Popen(ss_cmd_and_args)
 
     time.sleep(2)
     hdl = test_init(args)
@@ -441,7 +480,7 @@ def main():
     output5 = test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output5)
 
-    sw.kill()
+    ss_obj.kill()
 
 
 if __name__ == '__main__':
