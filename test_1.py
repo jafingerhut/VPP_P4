@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
-#import test_lib
+
 ''' test case for P4 '''
+
 from __future__ import print_function
 import Queue
 import threading
@@ -10,14 +11,15 @@ import subprocess
 import time
 from scapy.all import *
 from scapy.all import TCP, Ether, IP
-from test_lib import RuntimeAPI, test_init, get_parser, PreType
+from test_lib import test_init, get_parser, PreType
+from test_lib import RuntimeAPI as API
 
 
 
-def sniff_record(queue, port_interface_mapping):
+def sniff_record(queue, port_int_map):
     '''sniff record module : sniffs the queue for packets'''
     print("sniff start")
-    pkt = sniff(timeout=3, iface=port_interface_mapping['intf_names'])
+    pkt = sniff(timeout=3, iface=port_int_map['intf_names'])
     print("sniff stop returned %d packet" % (len(pkt)))
     queue.put(pkt)
 
@@ -39,7 +41,8 @@ def print_packets(input_packet, expected_packet):
 
 
 def split_string(input_packet, expected_packet):
-    '''splits the string and compares the expected and output pkt to find the difference. '''
+    '''Splits the string and compares the expected and output pkt to find
+    the difference.'''
     pack_in_len = len(input_packet)
     pack_out_len = len(expected_packet)
     if pack_in_len != pack_out_len:
@@ -131,25 +134,20 @@ def create_port_seq_list(expected_packets, sniffed_pack, input_ports):
         input_list = sniffed_dict[port_num]
         expected_packets = expected_dict[port_num]
         sniffin_len = len(input_list)
-    #print("sniffed output list: %d" % (sniffin_len))
         expected_len = len(expected_packets)
         if sniffin_len < expected_len:
             range_len = sniffin_len
-        #print(sniffin_len)
         else:
             range_len = expected_len
-    #print(list_len)
         for i in range(range_len):
             input_packet = byte_to_hex(str(input_list[i]['packet']))
             expected_packet = byte_to_hex(str(expected_packets[i]['packet']))
 
-        #print(expected_packet)
             exp_port = expected_packets[i]['port']
             in_port = input_list[i]['port']
             if exp_port == in_port:
                 result = split_string(input_packet, expected_packet)
                 if result == "equal":
-                #print("packet as expected")
                     continue
                 else:
                     return result
@@ -165,32 +163,32 @@ def create_port_seq_list(expected_packets, sniffed_pack, input_ports):
     return "All packets as expected"
 
 
-def send_pkts_and_capture(port_interface_mapping, port_packet_list):
+def send_pkts_and_capture(port_int_map, port_packet_list):
     ''' sends packets to P4 and captures by sniffing '''
     queue = Queue.Queue()
     thd = threading.Thread(name="sniff_thread",
-                           target=lambda: sniff_record(queue, port_interface_mapping))
+                           target=lambda: sniff_record(queue, port_int_map))
     thd.start()
     # gives time for time to start sniffing... so packets are sniffed once sniff call begins
     time.sleep(1)
     for x in port_packet_list:
         port_num = x['port']
-        iface_name = port_interface_mapping['port2intf'][port_num]
+        iface_name = port_int_map['port2intf'][port_num]
         sendp(x['packet'], iface=iface_name)
     thd.join()
     pack = queue.get(True)
     Packet_list = []
     for p in pack:
         eth = p.sniffed_on
-        port_no = port_interface_mapping['intf_port_names'][eth]
+        port_no = port_int_map['intf_port_names'][eth]
         Packet_list.append({'port': port_no, 'packet': p})
     return Packet_list
 
-def interfaceArgs(port_interface_mapping):
+def interfaceArgs(port_int_map):
     ''' written to start simple switch every time program has to run '''
     result = []
-    for port_int in port_interface_mapping['port2intf']:
-        eth_name = port_interface_mapping['port2intf'][port_int]
+    for port_int in port_int_map['port2intf']:
+        eth_name = port_int_map['port2intf'][port_int]
         result.append("-i " + str(port_int) + "@" + eth_name)
     return result
 
@@ -204,41 +202,42 @@ def check_equality(p, exp_pkt1):
 
 def port_intf_mapping(port2intf):
 
-    port_interface_mapping = {
+    port_int_map = {
         'port2intf':port2intf
     }
 
     intf_names = []
-    for port_num in port_interface_mapping['port2intf']:
-        intf_names.append(port_interface_mapping['port2intf'][port_num])
-    port_interface_mapping['intf_names'] = intf_names
+    for port_num in port_int_map['port2intf']:
+        intf_names.append(port_int_map['port2intf'][port_num])
+    port_int_map['intf_names'] = intf_names
 
     intf_port_map = {}
 
-    for port_num in port_interface_mapping['port2intf']:
-        intf_port_map[port_interface_mapping['port2intf'][port_num]] = port_num
-    port_interface_mapping['intf_port_names'] = intf_port_map
-    return port_interface_mapping
+    for port_num in port_int_map['port2intf']:
+        intf_port_map[port_int_map['port2intf'][port_num]] = port_num
+    port_int_map['intf_port_names'] = intf_port_map
+    return port_int_map
 
-def table_entries_unicast(a, exp_src_mac, exp_dst_mac):
+def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
 
-    RuntimeAPI.do_table_add(a, "ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
-    RuntimeAPI.do_table_add(a, "ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
-    RuntimeAPI.do_table_add(a, "ipv4_da_lpm set_l2ptr 10.1.0.32/32 => 45")
-    RuntimeAPI.do_table_add(a, "mac_da set_bd_dmac_intf 58 => 9 "+exp_dst_mac+" 2")
-    RuntimeAPI.do_table_add(a, "mac_da set_bd_dmac_intf 45 => 7 "+exp_dst_mac+" 3")
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 9 => "+exp_src_mac)
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 7 => "+exp_src_mac)
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 9 => 400")
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 7 => 400")
+    API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
+    API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
+    API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.32/32 => 45")
+    API.do_table_add(hdl, "mac_da set_bd_dmac_intf 58 => 9 " + exp_dst_mac + " 2")
+    API.do_table_add(hdl, "mac_da set_bd_dmac_intf 45 => 7 "+exp_dst_mac+" 3")
+    API.do_table_add(hdl, "send_frame rewrite_mac 9 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 7 => "+exp_src_mac)
+    API.do_table_add(hdl, "mtu_check assign_mtu 9 => 400")
+    API.do_table_add(hdl, "mtu_check assign_mtu 7 => 400")
 
 
-def test_mtu_regular(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create_str):
+def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
+    tcp_payload = "a" * 80
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
     fwd_pkt2 = Ether() / IP(dst='10.1.0.34') / TCP(sport=5793, dport=80)
     fwd_pkt3 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
-                Raw(create_str))
+                Raw(tcp_payload))
 
     exp_pkt1 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
                 IP(dst='10.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
@@ -248,8 +247,8 @@ def test_mtu_regular(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create
                 TCP(sport=5793, dport=80))
     exp_pkt3 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
                 IP(dst='10.1.0.32', ttl=fwd_pkt3[IP].ttl-1) /
-                TCP(sport=5793, dport=80) / Raw(create_str))
-    pack = send_pkts_and_capture(port_interface_mapping,
+                TCP(sport=5793, dport=80) / Raw(tcp_payload))
+    pack = send_pkts_and_capture(port_int_map,
                                  [{'port': 0, 'packet': fwd_pkt1},
                                   {'port': 1, 'packet': fwd_pkt2},
                                   {'port': 1, 'packet': fwd_pkt3}])
@@ -260,12 +259,13 @@ def test_mtu_regular(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create
                                   pack, input_ports)
     return output
 
-def test_mtu_failing(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create_str):
+def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
+    tcp_payload = "a" * 80
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
     fwd_pkt2 = Ether() / IP(dst='10.1.0.34') / TCP(sport=5793, dport=80)
     fwd_pkt3 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
-                Raw(create_str))
+                Raw(tcp_payload))
 
     exp_pkt1 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
                 IP(dst='10.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
@@ -275,8 +275,8 @@ def test_mtu_failing(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create
                 TCP(sport=5793, dport=80))
     exp_pkt3 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
                 IP(dst='10.1.0.32', ttl=fwd_pkt3[IP].ttl-1) /
-                TCP(sport=5793, dport=80) / Raw(create_str))
-    pack = send_pkts_and_capture(port_interface_mapping,
+                TCP(sport=5793, dport=80) / Raw(tcp_payload))
+    pack = send_pkts_and_capture(port_int_map,
                                  [{'port': 0, 'packet': fwd_pkt1},
                                   {'port': 1, 'packet': fwd_pkt2},
                                   {'port': 1, 'packet': fwd_pkt3}])
@@ -287,7 +287,7 @@ def test_mtu_failing(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create
                                   pack, input_ports)
     return output
 
-def test_ttl_cases(exp_src_mac, exp_dst_mac, port_interface_mapping, a):
+def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
     fwd_pkt2 = Ether() / IP(dst='10.1.0.34', ttl=1) / TCP(sport=5793, dport=80)
@@ -297,7 +297,7 @@ def test_ttl_cases(exp_src_mac, exp_dst_mac, port_interface_mapping, a):
                 IP(dst='10.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
                 TCP(sport=5793, dport=80))
 
-    pack = send_pkts_and_capture(port_interface_mapping,
+    pack = send_pkts_and_capture(port_int_map,
                                  [{'port': 0, 'packet': fwd_pkt1},
                                   {'port': 1, 'packet': fwd_pkt2},
                                   {'port': 1, 'packet': fwd_pkt3}])
@@ -306,45 +306,45 @@ def test_ttl_cases(exp_src_mac, exp_dst_mac, port_interface_mapping, a):
                                   pack, input_ports)
     return output
 
-def table_entries_multicast(a, exp_src_mac):
+def table_entries_multicast(hdl, exp_src_mac):
 
-    RuntimeAPI.do_table_add(a, "mcgp_sa_da_lookup set_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1")
-    RuntimeAPI.do_table_add(a, "mcgp_da_lookup set_mc_group 224.1.0.1 => 3 1 0 2")
+    API.do_table_add(hdl, "mcgp_sa_da_lookup set_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1")
+    API.do_table_add(hdl, "mcgp_da_lookup set_mc_group 224.1.0.1 => 3 1 0 2")
 
-    RuntimeAPI.do_table_add(a, "mcgp_bidirect set_bdir_map 0 1 => 1")
-    RuntimeAPI.do_table_add(a, "mcgp_bidirect set_bdir_map 1 2 => 1")
+    API.do_table_add(hdl, "mcgp_bidirect set_bdir_map 0 1 => 1")
+    API.do_table_add(hdl, "mcgp_bidirect set_bdir_map 1 2 => 1")
 
-    RuntimeAPI.do_mc_mgrp_create(a, "2")
-    RuntimeAPI.do_mc_mgrp_create(a, "3")
-    mc_node_value1 = RuntimeAPI.do_mc_node_create(a, "12 2 3")
-    mc_node_value2 = RuntimeAPI.do_mc_node_create(a, "24 4 5 6")
+    API.do_mc_mgrp_create(hdl, "2")
+    API.do_mc_mgrp_create(hdl, "3")
+    mc_node_value1 = API.do_mc_node_create(hdl, "12 2 3")
+    mc_node_value2 = API.do_mc_node_create(hdl, "24 4 5 6")
 
     node_handle1 = "2 " + str(mc_node_value1)
     node_handle2 = "3 " + str(mc_node_value2)
 
-    RuntimeAPI.do_mc_node_associate(a, node_handle1)
-    RuntimeAPI.do_mc_node_associate(a, node_handle2)
+    API.do_mc_node_associate(hdl, node_handle1)
+    API.do_mc_node_associate(hdl, node_handle2)
 
-    RuntimeAPI.do_table_add(a, "port_bd_rid out_bd_port_match 2 12 => 10")
-    RuntimeAPI.do_table_add(a, "port_bd_rid out_bd_port_match 3 12 => 11")
-    RuntimeAPI.do_table_add(a, "port_bd_rid out_bd_port_match 4 24 => 12")
-    RuntimeAPI.do_table_add(a, "port_bd_rid out_bd_port_match 5 24 => 13")
-    RuntimeAPI.do_table_add(a, "port_bd_rid out_bd_port_match 6 24 => 14")
+    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 2 12 => 10")
+    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 3 12 => 11")
+    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 4 24 => 12")
+    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 5 24 => 13")
+    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 6 24 => 14")
 
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 10 => 400")
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 11 => 400")
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 12 => 400")
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 13 => 400")
-    RuntimeAPI.do_table_add(a, "mtu_check assign_mtu 14 => 400")
+    API.do_table_add(hdl, "mtu_check assign_mtu 10 => 400")
+    API.do_table_add(hdl, "mtu_check assign_mtu 11 => 400")
+    API.do_table_add(hdl, "mtu_check assign_mtu 12 => 400")
+    API.do_table_add(hdl, "mtu_check assign_mtu 13 => 400")
+    API.do_table_add(hdl, "mtu_check assign_mtu 14 => 400")
 
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 10 => "+exp_src_mac)
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 11 => "+exp_src_mac)
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 12 => "+exp_src_mac)
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 13 => "+exp_src_mac)
-    RuntimeAPI.do_table_add(a, "send_frame rewrite_mac 14 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 10 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 11 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 12 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 13 => "+exp_src_mac)
+    API.do_table_add(hdl, "send_frame rewrite_mac 14 => "+exp_src_mac)
 
 
-def test_multicast_sa_da(a, port_interface_mapping, exp_src_mac, exp_dst_mac):
+def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     fwd_pkt1 = Ether() / IP(src='10.1.0.3', dst='224.1.0.1') / TCP(sport=5793, dport=80)
     fwd_pkt2 = Ether() / IP(src='10.1.0.5', dst='224.1.0.1') / TCP(sport=5793, dport=80)
@@ -356,7 +356,7 @@ def test_multicast_sa_da(a, port_interface_mapping, exp_src_mac, exp_dst_mac):
                 IP(src='10.1.0.5', dst='224.1.0.1', ttl=fwd_pkt2[IP].ttl-1) /
                 TCP(sport=5793, dport=80))
 
-    pack = send_pkts_and_capture(port_interface_mapping,
+    pack = send_pkts_and_capture(port_int_map,
                                  [{'port': 0, 'packet': fwd_pkt1},
                                   {'port': 1, 'packet': fwd_pkt2}])
     input_ports = {0, 1}
@@ -368,7 +368,7 @@ def test_multicast_sa_da(a, port_interface_mapping, exp_src_mac, exp_dst_mac):
                                   pack, input_ports)
     return output
 
-def test_multicast_rpf(a, port_interface_mapping, exp_src_mac, exp_dst_mac):
+def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     fwd_pkt1 = (Ether() / IP(src='10.1.0.3', dst='224.1.0.1') /
                 TCP(sport=5793, dport=80))
@@ -383,7 +383,7 @@ def test_multicast_rpf(a, port_interface_mapping, exp_src_mac, exp_dst_mac):
                 TCP(sport=5793, dport=80))
     # The ports 1 nad 0 are exchanged to check that the rpf and
     # ingress port are different , thus dropping the packets
-    pack = send_pkts_and_capture(port_interface_mapping,
+    pack = send_pkts_and_capture(port_int_map,
                                  [{'port': 1, 'packet': fwd_pkt1},
                                   {'port': 0, 'packet': fwd_pkt2}])
     input_ports = {0, 1}
@@ -397,14 +397,14 @@ def main():
     args.pre = PreType.SimplePreLAG
     # One time, construct a list of all ethernet interface names,
     # which will be used by future calls to sniff.
-    port_interface_mapping = port_intf_mapping({0: 'veth2',
-                                                1: 'veth4',
-                                                2: 'veth6',
-                                                3: 'veth8',
-                                                4: 'veth10',
-                                                5: 'veth12',
-                                                6: 'veth14'})
-
+    port_int_map = port_intf_mapping({0: 'veth2',
+                                      1: 'veth4',
+                                      2: 'veth6',
+                                      3: 'veth8',
+                                      4: 'veth10',
+                                      5: 'veth12',
+                                      6: 'veth14'})
+    
     thriftPort = 9090
     # enter the name of the json file which will be created when we
     # compile the P4 code.
@@ -419,28 +419,26 @@ def main():
     runswitch = (["simple_switch",
                   "--log-file", "log_file_data", "--log-flush",
                   "--thrift-port", str(thriftPort)] +
-                 interfaceArgs(port_interface_mapping) + [args.json])
+                 interfaceArgs(port_int_map) + [args.json])
     sw = subprocess.Popen(runswitch)
 
     time.sleep(2)
-    a = test_init(args)
+    hdl = test_init(args)
     exp_src_mac = "00:11:22:33:44:55"
     exp_dst_mac = "02:13:57:ab:cd:ef"
-    n = 80
-    create_str = "a" * n
 
-    table_entries_unicast(a, exp_src_mac, exp_dst_mac)
-    table_entries_multicast(a, exp_src_mac)
+    table_entries_unicast(hdl, exp_src_mac, exp_dst_mac)
+    table_entries_multicast(hdl, exp_src_mac)
 
-    output1 = test_mtu_regular(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create_str)
+    output1 = test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output1)
-    output2 = test_mtu_failing(exp_src_mac, exp_dst_mac, port_interface_mapping, a, create_str)
+    output2 = test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output2)
-    output3 = test_ttl_cases(exp_src_mac, exp_dst_mac, port_interface_mapping, a)
+    output3 = test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output3)
-    output4 = test_multicast_sa_da(a, port_interface_mapping, exp_src_mac, exp_dst_mac)
+    output4 = test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output4)
-    output5 = test_multicast_rpf(a, port_interface_mapping, exp_src_mac, exp_dst_mac)
+    output5 = test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output5)
 
     sw.kill()
