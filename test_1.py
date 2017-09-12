@@ -7,21 +7,20 @@ import subprocess
 from scapy.all import *
 from scapy.all import TCP, Ether, IP
 from runtime_CLI import test_init, get_parser, PreType
-from runtime_CLI import RuntimeAPI as API
 import sstf_lib as sstf
 
 
 def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
 
-    API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
-    API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
-    API.do_table_add(hdl, "ipv4_da_lpm set_l2ptr 10.1.0.32/32 => 45")
-    API.do_table_add(hdl, "mac_da set_bd_dmac_intf 58 => 9 " + exp_dst_mac + " 2")
-    API.do_table_add(hdl, "mac_da set_bd_dmac_intf 45 => 7 " + exp_dst_mac + " 3")
-    API.do_table_add(hdl, "send_frame rewrite_mac 9 => " + exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 7 => " + exp_src_mac)
-    API.do_table_add(hdl, "mtu_check assign_mtu 9 => 400")
-    API.do_table_add(hdl, "mtu_check assign_mtu 7 => 400")
+    hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
+    hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
+    hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.32/32 => 45")
+    hdl.do_table_add("mac_da set_bd_dmac_intf 58 => 9 " + exp_dst_mac + " 2")
+    hdl.do_table_add("mac_da set_bd_dmac_intf 45 => 7 " + exp_dst_mac + " 3")
+    hdl.do_table_add("send_frame rewrite_mac 9 => " + exp_src_mac)
+    hdl.do_table_add("send_frame rewrite_mac 7 => " + exp_src_mac)
+    hdl.do_table_add("mtu_check assign_mtu 9 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 7 => 400")
 
 
 def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
@@ -104,40 +103,40 @@ def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
 def table_entries_multicast(hdl, exp_src_mac):
 
-    API.do_table_add(hdl, "mcgp_sa_da_lookup set_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1")
-    API.do_table_add(hdl, "mcgp_da_lookup set_mc_group 224.1.0.1 => 3 1 0 2")
+    hdl.do_table_add("mcgp_sa_da_lookup set_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1")
+    hdl.do_table_add("mcgp_da_lookup set_mc_group 224.1.0.1 => 3 1 0 2")
 
-    API.do_table_add(hdl, "mcgp_bidirect set_bdir_map 0 1 => 1")
-    API.do_table_add(hdl, "mcgp_bidirect set_bdir_map 1 2 => 1")
+    hdl.do_table_add("mcgp_bidirect set_bdir_map 0 1 => 1")
+    hdl.do_table_add("mcgp_bidirect set_bdir_map 1 2 => 1")
 
-    API.do_mc_mgrp_create(hdl, "2")
-    API.do_mc_mgrp_create(hdl, "3")
-    mc_node_value1 = API.do_mc_node_create(hdl, "12 2 3")
-    mc_node_value2 = API.do_mc_node_create(hdl, "24 4 5 6")
+    hdl.do_mc_mgrp_create("2")
+    hdl.do_mc_mgrp_create("3")
+    mc_node_value1 = hdl.do_mc_node_create("12 2 3")
+    mc_node_value2 = hdl.do_mc_node_create("24 4 5 6")
 
     node_handle1 = "2 " + str(mc_node_value1)
     node_handle2 = "3 " + str(mc_node_value2)
 
-    API.do_mc_node_associate(hdl, node_handle1)
-    API.do_mc_node_associate(hdl, node_handle2)
+    hdl.do_mc_node_associate(node_handle1)
+    hdl.do_mc_node_associate(node_handle2)
 
-    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 2 12 => 10")
-    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 3 12 => 11")
-    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 4 24 => 12")
-    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 5 24 => 13")
-    API.do_table_add(hdl, "port_bd_rid out_bd_port_match 6 24 => 14")
+    hdl.do_table_add("port_bd_rid out_bd_port_match 2 12 => 10")
+    hdl.do_table_add("port_bd_rid out_bd_port_match 3 12 => 11")
+    hdl.do_table_add("port_bd_rid out_bd_port_match 4 24 => 12")
+    hdl.do_table_add("port_bd_rid out_bd_port_match 5 24 => 13")
+    hdl.do_table_add("port_bd_rid out_bd_port_match 6 24 => 14")
 
-    API.do_table_add(hdl, "mtu_check assign_mtu 10 => 400")
-    API.do_table_add(hdl, "mtu_check assign_mtu 11 => 400")
-    API.do_table_add(hdl, "mtu_check assign_mtu 12 => 400")
-    API.do_table_add(hdl, "mtu_check assign_mtu 13 => 400")
-    API.do_table_add(hdl, "mtu_check assign_mtu 14 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 10 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 11 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 12 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 13 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 14 => 400")
 
-    API.do_table_add(hdl, "send_frame rewrite_mac 10 => " + exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 11 => " + exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 12 => " + exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 13 => " + exp_src_mac)
-    API.do_table_add(hdl, "send_frame rewrite_mac 14 => " + exp_src_mac)
+    hdl.do_table_add("send_frame rewrite_mac 10 => " + exp_src_mac)
+    hdl.do_table_add("send_frame rewrite_mac 11 => " + exp_src_mac)
+    hdl.do_table_add("send_frame rewrite_mac 12 => " + exp_src_mac)
+    hdl.do_table_add("send_frame rewrite_mac 13 => " + exp_src_mac)
+    hdl.do_table_add("send_frame rewrite_mac 14 => " + exp_src_mac)
 
 
 def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
