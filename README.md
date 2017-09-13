@@ -21,7 +21,13 @@ Change to the directory where path where the test Python program is
 stored, here in VPP_P4 folder.  Then type the following commands:
 
 ```
+# Only needed once after booting the system, to create veth interfaces:
+# Get a copy of this repo: https://github.com/jafingerhut/p4-guide
+sudo <p4-guide-root>/bin/veth_setup.sh
+
+# Repeat compilation step whenever you change the P4 program source code
 p4c-bm2-ss <P4_program_name>.p4 -o <P4_program_name>.p4
+
 sudo <test_program>.py --json <P4_program_name>.json
 ```
 
