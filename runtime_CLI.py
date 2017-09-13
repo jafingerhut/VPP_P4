@@ -926,6 +926,7 @@ class RuntimeAPI(cmd.Cmd):
         table = self.get_res("table", table_name, TABLES)
 
         print self.client.bm_mt_get_num_entries(0, table_name)
+        return self.client.bm_mt_get_num_entries(0, table_name)
 
     def complete_table_num_entries(self, text, line, start_index, end_index):
         return self._complete_tables(text)
