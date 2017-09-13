@@ -1,10 +1,12 @@
 #!/usr/bin/env python2
 
+from __future__ import print_function
 import collections
 import os
 import Queue
 from StringIO import StringIO
 import subprocess
+import sys
 import time
 import threading
 
