@@ -12,6 +12,23 @@ import runtime_CLI
 import sstf_lib as sstf
 
 
+def update_macs_dec_ipv4_ttl(orig_eth_ipv4_pkt, new_src_mac='unchanged',
+                             new_dst_mac='unchanged'):
+    """This function is useful for creating an expected output packet from
+    an input packet that begins with an Ethernet header, followed
+    by an IPv4 header, when the only changes expected to be made to
+    the packet are: change the Ethernet source and destination MAC
+    addresses, and decrement the IPv4 TTL."""
+    
+    new_pkt = orig_eth_ipv4_pkt.copy()
+    if new_src_mac != 'unchanged':
+        new_pkt[Ether].src = new_src_mac
+    if new_dst_mac != 'unchanged':
+        new_pkt[Ether].dst = new_dst_mac
+    new_pkt[IP].ttl -= 1
+    return new_pkt
+
+
 def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
 
     hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
@@ -33,15 +50,16 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     fwd_pkt3 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
                 Raw(tcp_payload))
 
-    exp_pkt1 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    exp_pkt2 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.34', ttl=fwd_pkt2[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    exp_pkt3 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.32', ttl=fwd_pkt3[IP].ttl-1) /
-                TCP(sport=5793, dport=80) / Raw(tcp_payload))
+    exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac, exp_dst_mac)
+    exp_pkt2 = update_macs_dec_ipv4_ttl(fwd_pkt2, exp_src_mac, exp_dst_mac)
+    exp_pkt3 = update_macs_dec_ipv4_ttl(fwd_pkt3, exp_src_mac, exp_dst_mac)
+
+    # The following two commented-out lines can be used for verifying
+    # that comparison of expected and captured packet can detect
+    # mismatches in packet lengths.
+    #exp_pkt1 = Ether(str(exp_pkt1)[:-1])
+    #fwd_pkt1 = Ether(str(fwd_pkt1)[:-1])
+
     pack = sstf.send_pkts_and_capture(port_int_map,
                                       [{'port': 0, 'packet': fwd_pkt1},
                                        {'port': 1, 'packet': fwd_pkt2},
@@ -51,6 +69,26 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
                                   {'port': 2, 'packet': exp_pkt2},
                                   {'port': 3, 'packet': exp_pkt3}],
                                  pack, input_ports)
+
+    # The calls to check_out_pkts() below can be used for verifying
+    # that comparison of expected and captured packets can detect
+    # mismatches in the number of packets.
+#    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
+#                                  {'port': 2, 'packet': exp_pkt2},
+#                                  {'port': 3, 'packet': exp_pkt3},
+#                                  {'port': 3, 'packet': exp_pkt3}],
+#                                 pack, input_ports)
+#    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
+#                                  {'port': 2, 'packet': exp_pkt2}],
+#                                 pack, input_ports)
+#    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
+#                                  {'port': 3, 'packet': exp_pkt3}],
+#    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
+#                                  {'port': 2, 'packet': exp_pkt2},
+#                                  {'port': 3, 'packet': exp_pkt3},
+#                                  {'port': 4, 'packet': exp_pkt2}],
+#                                 pack, input_ports)
+
     return output
 
 
@@ -62,15 +100,10 @@ def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     fwd_pkt3 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
                 Raw(tcp_payload))
 
-    exp_pkt1 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    exp_pkt2 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.34', ttl=fwd_pkt2[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    exp_pkt3 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.32', ttl=fwd_pkt3[IP].ttl-1) /
-                TCP(sport=5793, dport=80) / Raw(tcp_payload))
+    exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac, exp_dst_mac)
+    exp_pkt2 = update_macs_dec_ipv4_ttl(fwd_pkt2, exp_src_mac, exp_dst_mac)
+    exp_pkt3 = update_macs_dec_ipv4_ttl(fwd_pkt3, exp_src_mac, exp_dst_mac)
+
     pack = sstf.send_pkts_and_capture(port_int_map,
                                       [{'port': 0, 'packet': fwd_pkt1},
                                        {'port': 1, 'packet': fwd_pkt2},
@@ -89,9 +122,7 @@ def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     fwd_pkt2 = Ether() / IP(dst='10.1.0.34', ttl=1) / TCP(sport=5793, dport=80)
     fwd_pkt3 = Ether() / IP(dst='10.1.0.32', ttl=0) / TCP(sport=5793, dport=80)
 
-    exp_pkt1 = (Ether(src=exp_src_mac, dst=exp_dst_mac) /
-                IP(dst='10.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
+    exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac, exp_dst_mac)
 
     pack = sstf.send_pkts_and_capture(port_int_map,
                                       [{'port': 0, 'packet': fwd_pkt1},
@@ -148,12 +179,11 @@ def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     fwd_pkt2 = (Ether() / IP(src='10.1.0.5', dst='224.1.0.1') /
                 TCP(sport=5793, dport=80))
 
-    exp_pkt1 = (Ether(src=exp_src_mac) /
-                IP(src='10.1.0.3', dst='224.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
-    exp_pkt2 = (Ether(src=exp_src_mac) /
-                IP(src='10.1.0.5', dst='224.1.0.1', ttl=fwd_pkt2[IP].ttl-1) /
-                TCP(sport=5793, dport=80))
+    # Note: At least for now, the P4 program being tested does not
+    # correctly modify the Ethernet destination MAC address, but
+    # leaves it unchanged.
+    exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac)
+    exp_pkt2 = update_macs_dec_ipv4_ttl(fwd_pkt2, exp_src_mac)
 
     pack = sstf.send_pkts_and_capture(port_int_map,
                                       [{'port': 0, 'packet': fwd_pkt1},
@@ -175,12 +205,9 @@ def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     fwd_pkt2 = (Ether() / IP(src='10.1.0.5', dst='224.1.0.1') /
                 TCP(sport=5793, dport=80))
 
-#    exp_pkt1 = (Ether(src=exp_src_mac) /
-#                IP(src='10.1.0.3', dst='224.1.0.1', ttl=fwd_pkt1[IP].ttl-1) /
-#                TCP(sport=5793, dport=80))
-#    exp_pkt2 = (Ether(src=exp_src_mac) /
-#                IP(src='10.1.0.5', dst='224.1.0.1', ttl=fwd_pkt2[IP].ttl-1) /
-#                TCP(sport=5793, dport=80))
+    # These input packets should be dropped by the multicast RPF check
+    # in the P4 program, so no need to create expected output packets.
+
     # The ports 1 and 0 are exchanged to check that the rpf and
     # ingress port are different, thus dropping the packets
     pack = sstf.send_pkts_and_capture(port_int_map,
