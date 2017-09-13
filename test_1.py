@@ -29,7 +29,7 @@ def update_macs_dec_ipv4_ttl(orig_eth_ipv4_pkt, new_src_mac='unchanged',
     return new_pkt
 
 
-def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
+def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac, port_mtu):
     """Add some table entries useful for testing some IPv4 unicast
     forwarding code."""
 
@@ -40,8 +40,8 @@ def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
     hdl.do_table_add("mac_da set_bd_dmac_intf 45 => 7 " + exp_dst_mac + " 3")
     hdl.do_table_add("send_frame rewrite_mac 9 => " + exp_src_mac)
     hdl.do_table_add("send_frame rewrite_mac 7 => " + exp_src_mac)
-    hdl.do_table_add("mtu_check assign_mtu 9 => 400")
-    hdl.do_table_add("mtu_check assign_mtu 7 => 400")
+    hdl.do_table_add("mtu_check assign_mtu 9 => " + str(port_mtu[2]))
+    hdl.do_table_add("mtu_check assign_mtu 7 => " + str(port_mtu[3]))
 
 
 def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
@@ -96,32 +96,38 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     return output
 
 
-def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
-    """The name of this test case implies that it is intended to test
-    cases where packets are dropped because they are too large for
-    the configured MTU of the output port.  However, right now it
-    appears that the packets are not being dropped, because they
-    are smaller than the output port MTU.  TBD: Update these test
-    cases."""
+def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac, port_mtu):
+    """Forward IPv4 unicast packets that are barely small enough to fit
+    within the output interface MTU, and barely too large to fit,
+    and are thus dropped by the current P4 program."""
 
-    tcp_payload = "a" * 80
-    fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
-    fwd_pkt2 = Ether() / IP(dst='10.1.0.34') / TCP(sport=5793, dport=80)
-    fwd_pkt3 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
-                Raw(tcp_payload))
+    # Subtract 14 for Ethernet header, 20 for IPv4 header without
+    # options, and another 20 for TCP header without options.
+    port_2_tcp_payload_mtu = port_mtu[2] - 14 - 20 - 20
+    port_3_tcp_payload_mtu = port_mtu[3] - 14 - 20 - 20
+    fwd_pkt1 = (Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80) /
+                Raw("a" * port_2_tcp_payload_mtu))
+    drop_pkt1a = (Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80) /
+                  Raw("a" * (port_2_tcp_payload_mtu + 1)))
+    drop_pkt1b = (Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80) /
+                  Raw("a" * (port_2_tcp_payload_mtu + 100)))
+    fwd_pkt2 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
+                Raw("a" * port_3_tcp_payload_mtu))
+    drop_pkt2 = (Ether() / IP(dst='10.1.0.32') / TCP(sport=5793, dport=80) /
+                 Raw("a" * (port_3_tcp_payload_mtu + 1)))
 
     exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac, exp_dst_mac)
     exp_pkt2 = update_macs_dec_ipv4_ttl(fwd_pkt2, exp_src_mac, exp_dst_mac)
-    exp_pkt3 = update_macs_dec_ipv4_ttl(fwd_pkt3, exp_src_mac, exp_dst_mac)
 
     cap_pkts = sstf.send_pkts_and_capture(port_int_map,
                                           [{'port': 0, 'packet': fwd_pkt1},
+                                           {'port': 0, 'packet': drop_pkt1a},
+                                           {'port': 1, 'packet': drop_pkt1b},
                                            {'port': 1, 'packet': fwd_pkt2},
-                                           {'port': 1, 'packet': fwd_pkt3}])
+                                           {'port': 1, 'packet': drop_pkt2}])
     input_ports = {0, 1}
     output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
-                                  {'port': 2, 'packet': exp_pkt2},
-                                  {'port': 3, 'packet': exp_pkt3}],
+                                  {'port': 3, 'packet': exp_pkt2}],
                                  cap_pkts, input_ports)
     return output
 
@@ -262,12 +268,14 @@ def main():
     exp_src_mac = "00:11:22:33:44:55"
     exp_dst_mac = "02:13:57:ab:cd:ef"
 
-    table_entries_unicast(hdl, exp_src_mac, exp_dst_mac)
+    port_mtu = [1518, 1518, 400, 1518]
+    table_entries_unicast(hdl, exp_src_mac, exp_dst_mac, port_mtu)
     table_entries_multicast(hdl, exp_src_mac)
 
     output1 = test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output1)
-    output2 = test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac)
+    output2 = test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac,
+                               port_mtu)
     print(output2)
     output3 = test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output3)
