@@ -35,13 +35,13 @@ For example:
 
 ```
 p4c-bm2-ss demo1.p4_16.p4 -o demo1.p4_16.p4
-sudo ./test_1.py --json demo1.p4_16.json
+sudo ./demo1_tests.py --json demo1.p4_16.json
 ```
 
 where:
 
 ```
-./test_1.py - name of the test file
+./demo1_tests.py - name of the test file
 --json - option to specify the JSON file of the P4 program.
 demo1.p4_16.json - json file name
 ```
@@ -78,7 +78,7 @@ Traverse to the folder containing the python test program.
 cd ~/VPP_P4
 
 To execute the .py file (run the program)
-sudo ./test_1.py
+sudo ./demo1_tests.py
 
 This program when executed will fill the tables with entries required to forward some packets as expected. Also it has commands to send the packet over the needed port number. 
 'sudo' is used to run the test program with root permissions, needed because the Scapy library needs these permissions to send packets to, and capture packets from, Ethernet interfaces.

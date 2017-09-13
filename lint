@@ -1,2 +1,2 @@
 #!/bin/bash
-pylint test_1.py sstf_lib.py --disable=unused-wildcard-import,invalid-name,no-name-in-module,missing-final-newline,wildcard-import,too-many-locals
+pylint demo1_tests.py sstf_lib.py --disable=unused-wildcard-import,invalid-name,no-name-in-module,missing-final-newline,wildcard-import,too-many-locals
