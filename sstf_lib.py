@@ -151,8 +151,9 @@ def split_string(captured_pkt, expected_pkt):
         return "FAILED: Not same - packet lengths different"
     captured_bytes = captured_pkt.split()
     expected_bytes = expected_pkt.split()
-    # TBD: for loop below should stop at end of the shorter packet,
-    # which might not be captured_pkt.
+    # These should always be the same, because the length of the two
+    # packets is the same, as checked above.
+    assert len(captured_bytes) == len(expected_bytes)
     list_len = len(captured_bytes)
     for i in range(list_len):
         if captured_bytes[i] != expected_bytes[i]:
