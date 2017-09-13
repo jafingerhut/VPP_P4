@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-''' test case for P4 '''
+'''Test cases for P4 program demo1.p4_16.p4'''
 
 from __future__ import print_function
 from scapy.all import *
