@@ -19,7 +19,7 @@ def update_macs_dec_ipv4_ttl(orig_eth_ipv4_pkt, new_src_mac='unchanged',
     by an IPv4 header, when the only changes expected to be made to
     the packet are: change the Ethernet source and destination MAC
     addresses, and decrement the IPv4 TTL."""
-    
+
     new_pkt = orig_eth_ipv4_pkt.copy()
     if new_src_mac != 'unchanged':
         new_pkt[Ether].src = new_src_mac
@@ -30,6 +30,8 @@ def update_macs_dec_ipv4_ttl(orig_eth_ipv4_pkt, new_src_mac='unchanged',
 
 
 def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
+    """Add some table entries useful for testing some IPv4 unicast
+    forwarding code."""
 
     hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
     hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
@@ -43,6 +45,8 @@ def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac):
 
 
 def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
+    """IPv4 unicast forwarding cases where packets are forwarded normally,
+    without dropping."""
 
     tcp_payload = "a" * 80
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
@@ -93,6 +97,12 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
 
 def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
+    """The name of this test case implies that it is intended to test
+    cases where packets are dropped because they are too large for
+    the configured MTU of the output port.  However, right now it
+    appears that the packets are not being dropped, because they
+    are smaller than the output port MTU.  TBD: Update these test
+    cases."""
 
     tcp_payload = "a" * 80
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
@@ -117,7 +127,11 @@ def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
 
 def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
+    """IPv4 unicast forwarding cases where several packets are dropped
+    because their TTL is 0 or 1."""
 
+    # fwd_pkt1 will be forwarded normally, but the other two should be
+    # dropped.
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
     fwd_pkt2 = Ether() / IP(dst='10.1.0.34', ttl=1) / TCP(sport=5793, dport=80)
     fwd_pkt3 = Ether() / IP(dst='10.1.0.32', ttl=0) / TCP(sport=5793, dport=80)
@@ -135,6 +149,8 @@ def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
 
 def table_entries_multicast(hdl, exp_src_mac):
+    """Add some table entries useful for testing some IPv4 multicast
+    forwarding code."""
 
     hdl.do_table_add("mcgp_sa_da_lookup set_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1")
     hdl.do_table_add("mcgp_da_lookup set_mc_group 224.1.0.1 => 3 1 0 2")
@@ -172,7 +188,10 @@ def table_entries_multicast(hdl, exp_src_mac):
     hdl.do_table_add("send_frame rewrite_mac 14 => " + exp_src_mac)
 
 
-def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
+def test_multicast_sa_da(hdl, port_int_map, exp_src_mac):
+    """IPv4 multicast forwarding cases where packets are forwarded
+    normally, with replication to multiple output ports, without
+    dropping."""
 
     fwd_pkt1 = (Ether() / IP(src='10.1.0.3', dst='224.1.0.1') /
                 TCP(sport=5793, dport=80))
@@ -198,7 +217,11 @@ def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     return output
 
 
-def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
+def test_multicast_rpf(hdl, port_int_map, exp_src_mac):
+    """IPv4 multicast forwarding cases where packets are dropped because
+    they arriv on an input port that is not one that the multicast
+    route they match allows to be forwarded -- the multicast RPF
+    check fails."""
 
     fwd_pkt1 = (Ether() / IP(src='10.1.0.3', dst='224.1.0.1') /
                 TCP(sport=5793, dport=80))
@@ -248,9 +271,9 @@ def main():
     print(output2)
     output3 = test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac)
     print(output3)
-    output4 = test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac)
+    output4 = test_multicast_sa_da(hdl, port_int_map, exp_src_mac)
     print(output4)
-    output5 = test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac)
+    output5 = test_multicast_rpf(hdl, port_int_map, exp_src_mac)
     print(output5)
 
     ss_process_obj.kill()
