@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 import collections
+from functools import wraps
 import os
 import Queue
 from StringIO import StringIO
@@ -13,6 +14,15 @@ import threading
 from runtime_CLI import get_parser, PreType
 from scapy.all import sniff, sendp
 
+
+def test_wrap(func):
+    @wraps(func)
+    def tmp(*args, **kwargs):
+        print("")
+        print("========================================")
+        print("Running test %s" % (func.__name__))
+        return func(*args, **kwargs)
+    return tmp
 
 
 def get_args():
