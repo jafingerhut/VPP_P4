@@ -176,7 +176,9 @@ def check_out_pkts(expected_pkt_lst, captured_pkt_lst, input_ports):
     ''' sniffs packet expected on output '''
     expected_pkts_by_port = packets_by_port(expected_pkt_lst, input_ports)
     captured_pkts_by_port = packets_by_port(captured_pkt_lst, input_ports)
-    for port_num in expected_pkts_by_port:
+    all_ports = set(expected_pkts_by_port.keys())
+    all_ports = all_ports.union(set(captured_pkts_by_port.keys()))
+    for port_num in all_ports:
         captured_lst = captured_pkts_by_port[port_num]
         expected_lst = expected_pkts_by_port[port_num]
         num_captured = len(captured_lst)
