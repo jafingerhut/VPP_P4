@@ -60,15 +60,15 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     #exp_pkt1 = Ether(str(exp_pkt1)[:-1])
     #fwd_pkt1 = Ether(str(fwd_pkt1)[:-1])
 
-    pack = sstf.send_pkts_and_capture(port_int_map,
-                                      [{'port': 0, 'packet': fwd_pkt1},
-                                       {'port': 1, 'packet': fwd_pkt2},
-                                       {'port': 1, 'packet': fwd_pkt3}])
+    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
+                                          [{'port': 0, 'packet': fwd_pkt1},
+                                           {'port': 1, 'packet': fwd_pkt2},
+                                           {'port': 1, 'packet': fwd_pkt3}])
     input_ports = {0, 1}
     output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
                                   {'port': 2, 'packet': exp_pkt2},
                                   {'port': 3, 'packet': exp_pkt3}],
-                                 pack, input_ports)
+                                 cap_pkts, input_ports)
 
     # The calls to check_out_pkts() below can be used for verifying
     # that comparison of expected and captured packets can detect
@@ -77,17 +77,17 @@ def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 #                                  {'port': 2, 'packet': exp_pkt2},
 #                                  {'port': 3, 'packet': exp_pkt3},
 #                                  {'port': 3, 'packet': exp_pkt3}],
-#                                 pack, input_ports)
+#                                 cap_pkts, input_ports)
 #    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
 #                                  {'port': 2, 'packet': exp_pkt2}],
-#                                 pack, input_ports)
+#                                 cap_pkts, input_ports)
 #    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
 #                                  {'port': 3, 'packet': exp_pkt3}],
 #    output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
 #                                  {'port': 2, 'packet': exp_pkt2},
 #                                  {'port': 3, 'packet': exp_pkt3},
 #                                  {'port': 4, 'packet': exp_pkt2}],
-#                                 pack, input_ports)
+#                                 cap_pkts, input_ports)
 
     return output
 
@@ -104,15 +104,15 @@ def test_mtu_failing(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     exp_pkt2 = update_macs_dec_ipv4_ttl(fwd_pkt2, exp_src_mac, exp_dst_mac)
     exp_pkt3 = update_macs_dec_ipv4_ttl(fwd_pkt3, exp_src_mac, exp_dst_mac)
 
-    pack = sstf.send_pkts_and_capture(port_int_map,
-                                      [{'port': 0, 'packet': fwd_pkt1},
-                                       {'port': 1, 'packet': fwd_pkt2},
-                                       {'port': 1, 'packet': fwd_pkt3}])
+    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
+                                          [{'port': 0, 'packet': fwd_pkt1},
+                                           {'port': 1, 'packet': fwd_pkt2},
+                                           {'port': 1, 'packet': fwd_pkt3}])
     input_ports = {0, 1}
     output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
                                   {'port': 2, 'packet': exp_pkt2},
                                   {'port': 3, 'packet': exp_pkt3}],
-                                 pack, input_ports)
+                                 cap_pkts, input_ports)
     return output
 
 
@@ -124,13 +124,13 @@ def test_ttl_cases(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac, exp_dst_mac)
 
-    pack = sstf.send_pkts_and_capture(port_int_map,
-                                      [{'port': 0, 'packet': fwd_pkt1},
-                                       {'port': 1, 'packet': fwd_pkt2},
-                                       {'port': 1, 'packet': fwd_pkt3}])
+    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
+                                          [{'port': 0, 'packet': fwd_pkt1},
+                                           {'port': 1, 'packet': fwd_pkt2},
+                                           {'port': 1, 'packet': fwd_pkt3}])
     input_ports = {0, 1}
     output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1}],
-                                 pack, input_ports)
+                                 cap_pkts, input_ports)
     return output
 
 
@@ -185,16 +185,16 @@ def test_multicast_sa_da(hdl, port_int_map, exp_src_mac, exp_dst_mac):
     exp_pkt1 = update_macs_dec_ipv4_ttl(fwd_pkt1, exp_src_mac)
     exp_pkt2 = update_macs_dec_ipv4_ttl(fwd_pkt2, exp_src_mac)
 
-    pack = sstf.send_pkts_and_capture(port_int_map,
-                                      [{'port': 0, 'packet': fwd_pkt1},
-                                       {'port': 1, 'packet': fwd_pkt2}])
+    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
+                                          [{'port': 0, 'packet': fwd_pkt1},
+                                           {'port': 1, 'packet': fwd_pkt2}])
     input_ports = {0, 1}
     output = sstf.check_out_pkts([{'port': 2, 'packet': exp_pkt1},
                                   {'port': 3, 'packet': exp_pkt1},
                                   {'port': 4, 'packet': exp_pkt2},
                                   {'port': 5, 'packet': exp_pkt2},
                                   {'port': 6, 'packet': exp_pkt2}],
-                                 pack, input_ports)
+                                 cap_pkts, input_ports)
     return output
 
 
@@ -210,11 +210,11 @@ def test_multicast_rpf(hdl, port_int_map, exp_src_mac, exp_dst_mac):
 
     # The ports 1 and 0 are exchanged to check that the rpf and
     # ingress port are different, thus dropping the packets
-    pack = sstf.send_pkts_and_capture(port_int_map,
-                                      [{'port': 1, 'packet': fwd_pkt1},
-                                       {'port': 0, 'packet': fwd_pkt2}])
+    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
+                                          [{'port': 1, 'packet': fwd_pkt1},
+                                           {'port': 0, 'packet': fwd_pkt2}])
     input_ports = {0, 1}
-    output = sstf.check_out_pkts([], pack, input_ports)
+    output = sstf.check_out_pkts([], cap_pkts, input_ports)
     return output
 
 
