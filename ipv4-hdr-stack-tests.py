@@ -56,72 +56,10 @@ def update_dbg_fields(pkt_in, valid_vec_parsed, valid_vec_deparsed):
     return new_pkt
 
 
-def test_case1(hdl, port_int_map):
-
-    hdl.do_table_set_default("ipv4_da_lpm my_nop")
-    fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
-    fwd_pkt2 = Ether() / IP(dst='10.1.0.1') / IP() / TCP(sport=5793, dport=80)
-    fwd_pkt3 = Ether() / IP(dst='10.1.0.1') / IP() / IP() / TCP(sport=5793, dport=80)
-    #print('fwd_pkt1 %s' % (sstf.byte_to_hex(str(fwd_pkt1))))
-    #print('fwd_pkt2 %s' % (sstf.byte_to_hex(str(fwd_pkt2))))
-    #print('fwd_pkt3 %s' % (sstf.byte_to_hex(str(fwd_pkt3))))
-
-    exp_pkt1 = update_dbg_fields(fwd_pkt1, [1, 0, 0, 0], [1, 0, 0, 0])
-    exp_pkt2 = update_dbg_fields(fwd_pkt2, [1, 1, 0, 0], [1, 1, 0, 0])
-    exp_pkt3 = update_dbg_fields(fwd_pkt3, [1, 1, 1, 0], [1, 1, 1, 0])
-
-    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
-                                          [{'port': 0, 'packet': fwd_pkt1},
-                                           {'port': 0, 'packet': fwd_pkt2},
-                                           {'port': 0, 'packet': fwd_pkt3}])
-    input_ports = {0}
-    output = sstf.check_out_pkts([{'port': 1, 'packet': exp_pkt1},
-                                  {'port': 1, 'packet': exp_pkt2},
-                                  {'port': 1, 'packet': exp_pkt3}],
-                                 cap_pkts, input_ports)
-
-    return output
-
-
 def eth_hdr_only(pkt_with_port):
     ret = copy.deepcopy(pkt_with_port)
     ret['packet'] = Ether(str(pkt_with_port['packet'])[0:14])
     return ret
-
-
-def test_add_hdr0(hdl, port_int_map):
-    hdl.do_table_set_default("ipv4_da_lpm add_hdr0")
-    fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
-    fwd_pkt2 = Ether() / IP(dst='10.1.0.1') / IP() / TCP(sport=5793, dport=80)
-    fwd_pkt3 = Ether() / IP(dst='10.1.0.1') / IP() / IP() / TCP(sport=5793, dport=80)
-    fwd_pkt4 = Ether() / IP(dst='10.1.0.1') / IP() / IP() / IP() / TCP(sport=5793, dport=80)
-
-    exp_pkt1 = update_dbg_fields(fwd_pkt1, [1, 0, 0, 0], [1, 0, 0, 0])
-    exp_pkt2 = update_dbg_fields(fwd_pkt2, [1, 1, 0, 0], [1, 1, 0, 0])
-    exp_pkt3 = update_dbg_fields(fwd_pkt3, [1, 1, 1, 0], [1, 1, 1, 0])
-    exp_pkt4 = update_dbg_fields(fwd_pkt4, [1, 1, 1, 1], [1, 1, 1, 1])
-
-    cap_pkts = sstf.send_pkts_and_capture(port_int_map,
-                                          [{'port': 0, 'packet': fwd_pkt1},
-                                           {'port': 0, 'packet': fwd_pkt2},
-                                           {'port': 0, 'packet': fwd_pkt3},
-                                           {'port': 0, 'packet': fwd_pkt4}])
-    input_ports = {0}
-
-    # Don't bother trying to check every byte of the output packet.
-    # Focus on the least significant 4 bits of the Ethernet source and
-    # dest addresses.
-    cap_pkts_eth_only = [eth_hdr_only(p) for p in cap_pkts]
-    exp_pkts = [{'port': 1, 'packet': exp_pkt1},
-                {'port': 1, 'packet': exp_pkt2},
-                {'port': 1, 'packet': exp_pkt3},
-                {'port': 1, 'packet': exp_pkt4}]
-    exp_pkts_eth_only = [eth_hdr_only(p) for p in exp_pkts]
-
-    output = sstf.check_out_pkts(exp_pkts_eth_only,
-                                 cap_pkts_eth_only, input_ports)
-
-    return output
 
 
 def update_stack_valid(stack_valid_list, my_action):
@@ -147,6 +85,63 @@ def update_stack_valid(stack_valid_list, my_action):
     return ret
         
 
+def create_exp_pkt(input_pkt, input_valid_vector, my_action):
+    input_pkt_str = str(input_pkt)
+    eth_str = input_pkt_str[0:14]
+    ip_hdr_strs = []
+    offset = 14
+    for i in range(4):
+        if input_valid_vector[i] == 1:
+            ip_hdr_strs.append(input_pkt_str[offset:offset+20])
+            offset += 20
+        else:
+            ip_hdr_strs.append("")
+    rest_of_pkt_str = input_pkt_str[offset:]
+
+    if my_action == 'my_nop':
+        op = 'nop'
+    elif my_action == 'add_hdr0':
+        op = 'add'
+        pos = 0
+    elif my_action == 'add_hdr1':
+        op = 'add'
+        pos = 1
+    elif my_action == 'add_hdr2':
+        op = 'add'
+        pos = 2
+    elif my_action == 'add_hdr3':
+        op = 'add'
+        pos = 3
+    elif my_action == 'rm_hdr0':
+        op = 'rm'
+        pos = 0
+    elif my_action == 'rm_hdr1':
+        op = 'rm'
+        pos = 1
+    elif my_action == 'rm_hdr2':
+        op = 'rm'
+        pos = 2
+    elif my_action == 'rm_hdr3':
+        op = 'rm'
+        pos = 3
+    if op == 'add':
+        tmp_pkt = (Ether() / IP(len=20, id=0, ttl=64+pos, proto=4, chksum=0,
+                                src='250.206.0.%d' % (pos), dst='0.0.0.0'))
+        ip_hdr_strs[pos] = str(tmp_pkt)[14:14+20]
+    elif op == 'rm':
+        ip_hdr_strs[pos] = ""
+
+    exp_pkt_str = eth_str
+    for i in range(4):
+        exp_pkt_str += ip_hdr_strs[i]
+    exp_pkt_str += rest_of_pkt_str
+    exp_pkt = Ether(exp_pkt_str)
+    exp_pkt2 = update_dbg_fields(exp_pkt, input_valid_vector,
+                                 update_stack_valid(input_valid_vector,
+                                                    my_action))
+    return exp_pkt2
+
+
 def test_one_hdr_op(hdl, port_int_map, my_action):
     hdl.do_table_set_default("ipv4_da_lpm %s" % (my_action))
     fwd_pkt1 = Ether() / IP(dst='10.1.0.1') / TCP(sport=5793, dport=80)
@@ -154,18 +149,10 @@ def test_one_hdr_op(hdl, port_int_map, my_action):
     fwd_pkt3 = Ether() / IP(dst='10.1.0.1') / IP() / IP() / TCP(sport=5793, dport=80)
     fwd_pkt4 = Ether() / IP(dst='10.1.0.1') / IP() / IP() / IP() / TCP(sport=5793, dport=80)
 
-    exp_pkt1 = update_dbg_fields(fwd_pkt1,
-                                 [1, 0, 0, 0],
-                                 update_stack_valid([1, 0, 0, 0], my_action))
-    exp_pkt2 = update_dbg_fields(fwd_pkt2,
-                                 [1, 1, 0, 0],
-                                 update_stack_valid([1, 1, 0, 0], my_action))
-    exp_pkt3 = update_dbg_fields(fwd_pkt3,
-                                 [1, 1, 1, 0],
-                                 update_stack_valid([1, 1, 1, 0], my_action))
-    exp_pkt4 = update_dbg_fields(fwd_pkt4,
-                                 [1, 1, 1, 1],
-                                 update_stack_valid([1, 1, 1, 1], my_action))
+    exp_pkt1 = create_exp_pkt(fwd_pkt1, [1, 0, 0, 0], my_action)
+    exp_pkt2 = create_exp_pkt(fwd_pkt2, [1, 1, 0, 0], my_action)
+    exp_pkt3 = create_exp_pkt(fwd_pkt3, [1, 1, 1, 0], my_action)
+    exp_pkt4 = create_exp_pkt(fwd_pkt4, [1, 1, 1, 1], my_action)
 
     cap_pkts = sstf.send_pkts_and_capture(port_int_map,
                                           [
@@ -176,20 +163,13 @@ def test_one_hdr_op(hdl, port_int_map, my_action):
                                           ])
     input_ports = {0}
 
-    # Don't bother trying to check every byte of the output packet.
-    # Focus on the least significant 4 bits of the Ethernet source and
-    # dest addresses.
-    cap_pkts_eth_only = [eth_hdr_only(p) for p in cap_pkts]
     exp_pkts = [
         {'port': 1, 'packet': exp_pkt1},
         {'port': 1, 'packet': exp_pkt2},
         {'port': 1, 'packet': exp_pkt3},
         {'port': 1, 'packet': exp_pkt4}
     ]
-    exp_pkts_eth_only = [eth_hdr_only(p) for p in exp_pkts]
-
-    output = sstf.check_out_pkts(exp_pkts_eth_only,
-                                 cap_pkts_eth_only, input_ports)
+    output = sstf.check_out_pkts(exp_pkts, cap_pkts, input_ports)
 
     return output
 
@@ -209,12 +189,6 @@ def main():
 
     table_entries1(hdl)
 
-    #output1 = test_case1(hdl, port_int_map)
-    #print(output1)
-    #output1 = test_add_hdr0(hdl, port_int_map)
-    #print(output1)
-    #output1 = test_add_hdr2(hdl, port_int_map)
-    #print(output1)
     for hdr_op in ['my_nop',
                    'add_hdr0', 'add_hdr1', 'add_hdr2', 'add_hdr3',
                    'rm_hdr0', 'rm_hdr1', 'rm_hdr2', 'rm_hdr3' ]:
