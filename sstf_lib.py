@@ -30,6 +30,13 @@ def get_args():
     # See comments in runtime_CLI.py for method test_init() for why
     # the following assignment.
     args.pre = PreType.SimplePreLAG
+    if not isinstance(args.json, str):
+        print("You must specify the name of a compiled JSON file using the"
+              " command line option: --json <filename>")
+        sys.exit(1)
+    if not os.path.isfile(args.json):
+        print("JSON file does not exist: %s" % (args.json))
+        sys.exit(1)
 
     #print('args.thrift_port=%s' % (args.thrift_port))
     #print('args.thrift_ip=%s' % (args.thrift_ip))
@@ -83,6 +90,13 @@ def start_simple_switch(args, port_int_map):
     # avoid confusion, kill any existing simple_switch processes
     # before proceeding.
     subprocess.call(["killall", "simple_switch"])
+    # If you give a string after the --log-file option on the
+    # simple_switch command line, it uses that plus ".txt" as the name
+    # of a file to which log messages should be appended.  It does not
+    # overwrite log messages that might already be in that file, which
+    # can be confusing if you expect it to contain only log messages
+    # from the most recent run.  Thus, remove the file before running
+    # simple_switch.
     log_file_base_name = "log_file_data"
     log_file_full_name = log_file_base_name + ".txt"
     try:
