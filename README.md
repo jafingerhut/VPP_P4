@@ -17,10 +17,13 @@ Simple switch is like a interface to connect to hardware. It obtains the json fi
 
 Steps to execute the test cases:
 
+See the one-time setup requirements in the next section below.
+
 Change to the directory where path where the test Python program is
 stored, here in VPP_P4 folder.  Then type the following commands:
 
 ```
+
 # Only needed once after booting the system, to create veth interfaces:
 # Get a copy of this repo: https://github.com/jafingerhut/p4-guide
 sudo <p4-guide-root>/bin/veth_setup.sh
@@ -47,6 +50,24 @@ demo1.p4_16.json - json file name
 ```
 
 This will run the `simple_switch` process, assign port numbers to veth interfaces and `simple_switch` remains running until the packets are received on the expcted ports.
+
+
+# One-time setup requirements
+
+For installing p4c and simple_switch, there is a
+[script](https://github.com/jafingerhut/p4-guide/blob/master/bin/install-p4dev.sh)
+by Andy Fingerhut. Make sure that simple_switch is in your path.
+
+This code has been tested to work with Scapy 2.3.3, and is known to
+have problems if you try to use it with an older version Scapy 2.2.0
+installed.  To install Scapy 2.3.3 an Ubuntu 16.04 machine:
+
+```
+% pip install scapy==2.3.3
+```
+
+Note: this software has been developed and tested on Ubuntu 16.04
+and likely requires changes to run on other operating systems.
 
 
 # Older steps that should no longer be necessary with current code
