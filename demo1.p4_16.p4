@@ -61,7 +61,7 @@ struct headers {
 // Why bother creating an action that just does one primitive action?
 // That is, why not just use 'mark_to_drop' as one of the possible
 // actions when defining a table?  Because the P4_16 compiler does not
-// allow primitve actions to be used directly as actions of tables.
+// allow primitive actions to be used directly as actions of tables.
 // You must use 'compound actions', i.e. ones explicitly defined with
 // the 'action' keyword like below.
 
@@ -96,11 +96,11 @@ control ingress(inout headers hdr,
                 inout metadata meta,
                 inout standard_metadata_t standard_metadata)
 {
-    action set_l2ptr(bit<32> l2ptr) 
+    action set_l2ptr(bit<32> l2ptr)
     {
         meta.fwd_metadata.l2ptr = l2ptr;
     }
-    table ipv4_da_lpm 
+    table ipv4_da_lpm
     {
         key = {
             hdr.ipv4.dstAddr: lpm;
@@ -114,7 +114,7 @@ control ingress(inout headers hdr,
 
     // multicast group match action tables
 
-    action set_mc_group(bit<16> mcgp, bit<9> rpf, bit<1> is_bdir, bit<4> bdir_index) 
+    action set_mc_group(bit<16> mcgp, bit<9> rpf, bit<1> is_bdir, bit<4> bdir_index)
     {
         standard_metadata.mcast_grp = mcgp;
         // Reverse path forwading check for multicast case
@@ -129,7 +129,7 @@ control ingress(inout headers hdr,
     {
         meta.fwd_metadata.setbit_dir = setbit_dir;
     }
-    table mcgp_sa_da_lookup 
+    table mcgp_sa_da_lookup
     {
         key = {
             hdr.ipv4.srcAddr: exact;
@@ -142,7 +142,7 @@ control ingress(inout headers hdr,
         default_action = noAction();
     }
 
-    table mcgp_da_lookup 
+    table mcgp_da_lookup
     {
         key = {
             hdr.ipv4.dstAddr: exact;
@@ -154,7 +154,7 @@ control ingress(inout headers hdr,
         default_action = noAction();
     }
 
-    table mcgp_bidirect 
+    table mcgp_bidirect
     {
         key = {
             standard_metadata.ingress_port: exact;
@@ -301,7 +301,7 @@ control egress(inout headers hdr,
             // for now dropping the packet. To do later: create a special header which will send an ICMP message back.
             my_drop();
             return;
-        } 
+        }
         //port_bd_rid.apply();
         send_frame.apply();
     }
@@ -314,50 +314,43 @@ control DeparserImpl(packet_out packet, in headers hdr) {
     }
 }
 
-control verifyChecksum(in headers hdr, inout metadata meta) 
+control verifyChecksum(inout headers hdr, inout metadata meta)
 {
-    Checksum16() ipv4_checksum;
-    apply 
+    apply
     {
-        if ((hdr.ipv4.ihl == 4w5) &&
-            (hdr.ipv4.hdrChecksum ==
-             ipv4_checksum.get({ hdr.ipv4.version,
-                         hdr.ipv4.ihl,
-                         hdr.ipv4.diffserv,
-                         hdr.ipv4.totalLen,
-                         hdr.ipv4.identification,
-                         hdr.ipv4.flags,
-                         hdr.ipv4.fragOffset,
-                         hdr.ipv4.ttl,
-                         hdr.ipv4.protocol,
-                         hdr.ipv4.srcAddr,
-                         hdr.ipv4.dstAddr })))
-        {
-            mark_to_drop();
-        }
+        verify_checksum(hdr.ipv4.ihl == 5,
+            { hdr.ipv4.version,
+                hdr.ipv4.ihl,
+                hdr.ipv4.diffserv,
+                hdr.ipv4.totalLen,
+                hdr.ipv4.identification,
+                hdr.ipv4.flags,
+                hdr.ipv4.fragOffset,
+                hdr.ipv4.ttl,
+                hdr.ipv4.protocol,
+                hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr },
+            hdr.ipv4.hdrChecksum, HashAlgorithm.csum16);
     }
 }
 
-control computeChecksum(inout headers hdr, inout metadata meta) 
+control computeChecksum(inout headers hdr, inout metadata meta)
 {
-    Checksum16() ipv4_checksum;
-    apply 
+    apply
     {
-        if (hdr.ipv4.ihl == 4w5) 
-        {
-            hdr.ipv4.hdrChecksum =
-                ipv4_checksum.get({ hdr.ipv4.version,
-                            hdr.ipv4.ihl,
-                            hdr.ipv4.diffserv,
-                            hdr.ipv4.totalLen,
-                            hdr.ipv4.identification,
-                            hdr.ipv4.flags,
-                            hdr.ipv4.fragOffset,
-                            hdr.ipv4.ttl,
-                            hdr.ipv4.protocol,
-                            hdr.ipv4.srcAddr,
-                            hdr.ipv4.dstAddr });
-        }
+        update_checksum(hdr.ipv4.ihl == 5,
+            { hdr.ipv4.version,
+                hdr.ipv4.ihl,
+                hdr.ipv4.diffserv,
+                hdr.ipv4.totalLen,
+                hdr.ipv4.identification,
+                hdr.ipv4.flags,
+                hdr.ipv4.fragOffset,
+                hdr.ipv4.ttl,
+                hdr.ipv4.protocol,
+                hdr.ipv4.srcAddr,
+                hdr.ipv4.dstAddr },
+            hdr.ipv4.hdrChecksum, HashAlgorithm.csum16);
     }
 }
 
