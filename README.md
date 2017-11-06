@@ -37,7 +37,7 @@ sudo <test_program>.py --json <P4_program_name>.json
 For example:
 
 ```
-p4c-bm2-ss demo1.p4_16.p4 -o demo1.p4_16.p4
+p4c-bm2-ss demo1.p4_16.p4 -o demo1.p4_16.json
 sudo ./demo1_tests.py --json demo1.p4_16.json
 ```
 
