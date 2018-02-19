@@ -12,6 +12,17 @@ import runtime_CLI
 import sstf_lib as sstf
 
 
+# p4c as of about 2018-Jan uses hierarchical names for table and
+# extern instance names.
+ipfx = "ingress."
+epfx = "egress."
+
+# No prefix necessary for P4_14 programs, since all tables are
+# global in scope.
+#ipfx = ""
+#epfx = ""
+
+
 def update_macs_dec_ipv4_ttl(orig_eth_ipv4_pkt, new_src_mac='unchanged',
                              new_dst_mac='unchanged'):
     """This function is useful for creating an expected output packet from
@@ -33,15 +44,15 @@ def table_entries_unicast(hdl, exp_src_mac, exp_dst_mac, port_mtu):
     """Add some table entries useful for testing some IPv4 unicast
     forwarding code."""
 
-    hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.1/32 => 58")
-    hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.34/32 => 58")
-    hdl.do_table_add("ipv4_da_lpm set_l2ptr 10.1.0.32/32 => 45")
-    hdl.do_table_add("mac_da set_bd_dmac_intf 58 => 9 " + exp_dst_mac + " 2")
-    hdl.do_table_add("mac_da set_bd_dmac_intf 45 => 7 " + exp_dst_mac + " 3")
-    hdl.do_table_add("send_frame rewrite_mac 9 => " + exp_src_mac)
-    hdl.do_table_add("send_frame rewrite_mac 7 => " + exp_src_mac)
-    hdl.do_table_add("mtu_check assign_mtu 9 => " + str(port_mtu[2]))
-    hdl.do_table_add("mtu_check assign_mtu 7 => " + str(port_mtu[3]))
+    hdl.do_table_add("%sipv4_da_lpm %sset_l2ptr 10.1.0.1/32 => 58" % (ipfx, ipfx))
+    hdl.do_table_add("%sipv4_da_lpm %sset_l2ptr 10.1.0.34/32 => 58" % (ipfx, ipfx))
+    hdl.do_table_add("%sipv4_da_lpm %sset_l2ptr 10.1.0.32/32 => 45" % (ipfx, ipfx))
+    hdl.do_table_add("%smac_da %sset_bd_dmac_intf 58 => 9 %s 2" % (ipfx, ipfx, exp_dst_mac))
+    hdl.do_table_add("%smac_da %sset_bd_dmac_intf 45 => 7 %s 3" % (ipfx, ipfx, exp_dst_mac))
+    hdl.do_table_add("%ssend_frame %srewrite_mac 9 => %s" % (epfx, epfx, exp_src_mac))
+    hdl.do_table_add("%ssend_frame %srewrite_mac 7 => %s" % (epfx, epfx, exp_src_mac))
+    hdl.do_table_add("%smtu_check %sassign_mtu 9 => %s" % (epfx, epfx, str(port_mtu[2])))
+    hdl.do_table_add("%smtu_check %sassign_mtu 7 => %s" % (epfx, epfx, str(port_mtu[3])))
 
 
 def test_mtu_regular(hdl, port_int_map, exp_src_mac, exp_dst_mac):
@@ -158,11 +169,11 @@ def table_entries_multicast(hdl, exp_src_mac):
     """Add some table entries useful for testing some IPv4 multicast
     forwarding code."""
 
-    hdl.do_table_add("mcgp_sa_da_lookup set_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1")
-    hdl.do_table_add("mcgp_da_lookup set_mc_group 224.1.0.1 => 3 1 0 2")
+    hdl.do_table_add("%smcgp_sa_da_lookup %sset_mc_group 10.1.0.3 224.1.0.1 => 2 0 0 1" % (ipfx, ipfx))
+    hdl.do_table_add("%smcgp_da_lookup %sset_mc_group 224.1.0.1 => 3 1 0 2" % (ipfx, ipfx))
 
-    hdl.do_table_add("mcgp_bidirect set_bdir_map 0 1 => 1")
-    hdl.do_table_add("mcgp_bidirect set_bdir_map 1 2 => 1")
+    hdl.do_table_add("%smcgp_bidirect %sset_bdir_map 0 1 => 1" % (ipfx, ipfx))
+    hdl.do_table_add("%smcgp_bidirect %sset_bdir_map 1 2 => 1" % (ipfx, ipfx))
 
     hdl.do_mc_mgrp_create("2")
     hdl.do_mc_mgrp_create("3")
@@ -175,23 +186,23 @@ def table_entries_multicast(hdl, exp_src_mac):
     hdl.do_mc_node_associate(node_handle1)
     hdl.do_mc_node_associate(node_handle2)
 
-    hdl.do_table_add("port_bd_rid out_bd_port_match 2 12 => 10")
-    hdl.do_table_add("port_bd_rid out_bd_port_match 3 12 => 11")
-    hdl.do_table_add("port_bd_rid out_bd_port_match 4 24 => 12")
-    hdl.do_table_add("port_bd_rid out_bd_port_match 5 24 => 13")
-    hdl.do_table_add("port_bd_rid out_bd_port_match 6 24 => 14")
+    hdl.do_table_add("%sport_bd_rid %sout_bd_port_match 2 12 => 10" % (epfx, epfx))
+    hdl.do_table_add("%sport_bd_rid %sout_bd_port_match 3 12 => 11" % (epfx, epfx))
+    hdl.do_table_add("%sport_bd_rid %sout_bd_port_match 4 24 => 12" % (epfx, epfx))
+    hdl.do_table_add("%sport_bd_rid %sout_bd_port_match 5 24 => 13" % (epfx, epfx))
+    hdl.do_table_add("%sport_bd_rid %sout_bd_port_match 6 24 => 14" % (epfx, epfx))
 
-    hdl.do_table_add("mtu_check assign_mtu 10 => 400")
-    hdl.do_table_add("mtu_check assign_mtu 11 => 400")
-    hdl.do_table_add("mtu_check assign_mtu 12 => 400")
-    hdl.do_table_add("mtu_check assign_mtu 13 => 400")
-    hdl.do_table_add("mtu_check assign_mtu 14 => 400")
+    hdl.do_table_add("%smtu_check %sassign_mtu 10 => 400" % (epfx, epfx))
+    hdl.do_table_add("%smtu_check %sassign_mtu 11 => 400" % (epfx, epfx))
+    hdl.do_table_add("%smtu_check %sassign_mtu 12 => 400" % (epfx, epfx))
+    hdl.do_table_add("%smtu_check %sassign_mtu 13 => 400" % (epfx, epfx))
+    hdl.do_table_add("%smtu_check %sassign_mtu 14 => 400" % (epfx, epfx))
 
-    hdl.do_table_add("send_frame rewrite_mac 10 => " + exp_src_mac)
-    hdl.do_table_add("send_frame rewrite_mac 11 => " + exp_src_mac)
-    hdl.do_table_add("send_frame rewrite_mac 12 => " + exp_src_mac)
-    hdl.do_table_add("send_frame rewrite_mac 13 => " + exp_src_mac)
-    hdl.do_table_add("send_frame rewrite_mac 14 => " + exp_src_mac)
+    hdl.do_table_add("%ssend_frame %srewrite_mac 10 => %s" % (epfx, epfx, exp_src_mac))
+    hdl.do_table_add("%ssend_frame %srewrite_mac 11 => %s" % (epfx, epfx, exp_src_mac))
+    hdl.do_table_add("%ssend_frame %srewrite_mac 12 => %s" % (epfx, epfx, exp_src_mac))
+    hdl.do_table_add("%ssend_frame %srewrite_mac 13 => %s" % (epfx, epfx, exp_src_mac))
+    hdl.do_table_add("%ssend_frame %srewrite_mac 14 => %s" % (epfx, epfx, exp_src_mac))
 
 
 def test_multicast_sa_da(hdl, port_int_map, exp_src_mac):
